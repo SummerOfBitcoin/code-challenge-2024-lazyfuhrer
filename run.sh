@@ -1,1 +1,5 @@
-# Update this file to run your own code
+#!/bin/bash
+
+chmod +x run.sh
+
+python3 mainnew.py
