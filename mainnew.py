@@ -1,8 +1,9 @@
 import os, json, time
-from utils import calculate_merkle_root, double_sha256, extract_public_keys_p2sh, extract_public_keys_p2wsh, extract_signatures_p2sh, extract_sigs_p2wsh, natural_txid_to_reverse, reverse_txid_to_natural, get_tx_id, encode_compact_size, is_sig_valid, decode_p2pkh_scriptsig
+from utils import calculate_merkle_root, double_sha256, extract_public_keys_p2sh, extract_public_keys_p2wsh, extract_signatures_p2sh, extract_sigs_p2wsh, get_file_name, natural_txid_to_reverse, reverse_txid_to_natural, get_tx_id, encode_compact_size, is_sig_valid, decode_p2pkh_scriptsig
 
 directory = './mempool'
 
+max_block_weight = 4000000
 witness_reserved_value = "0000000000000000000000000000000000000000000000000000000000000000"
 wt_txid_arr = [witness_reserved_value]
 tx_ids_arr = []
@@ -59,7 +60,12 @@ for filename in os.listdir(directory):
         output_amount = 0
 
         is_tx_valid = True
-              
+
+        non_w_weight = 4 + 4 + len(encode_compact_size(len(data["vin"]))) + len(encode_compact_size(len(data["vout"])))
+        w_weight = 0
+        if tx_type=="s":
+            w_weight = 2
+
         # looping through inputs
         for item in data["vin"]:
             natural_tx_id = reverse_txid_to_natural(item["txid"])
@@ -72,16 +78,28 @@ for filename in os.listdir(directory):
                 if "witness" in item:
                     witness_items_size = encode_compact_size(len(item["witness"])).hex()
                     witness_data = ""
+
+                    w_weight += len(encode_compact_size(len(item["witness"])))
+
                     for val in item["witness"]:
                         size = encode_compact_size(len(bytes.fromhex(val))).hex()
                         witness_data += size+val
+
+                        w_weight += len(encode_compact_size(len(bytes.fromhex(val)))) + len(bytes.fromhex(val))
+                        
                     input_stream_witness += witness_items_size + witness_data    
                 else:
                     input_stream_witness += "00"
+                    w_weight += 1
 
             input_stream += natural_tx_id+vout+script_sig_size+script_sig+sequence_no
- 
             input_amount += item["prevout"]["value"]
+
+            script_sig_size_byte = len(encode_compact_size(len(bytes.fromhex(item["scriptsig"]))))
+            script_sig_byte = len(bytes.fromhex(item["scriptsig"]))
+
+            non_w_weight += 32+4+4+script_sig_size_byte+script_sig_byte
+
 
         #print(input_stream) 
 
@@ -93,6 +111,11 @@ for filename in os.listdir(directory):
             output_stream += amount+script_pubkey_size+script_pubkey
 
             output_amount += item["value"]  
+
+            script_pubkey_size_byte = len(encode_compact_size(len(bytes.fromhex(item["scriptpubkey"]))))
+            script_pubkey_byte = len(bytes.fromhex(item["scriptpubkey"]))
+
+            non_w_weight += 8+script_pubkey_size_byte+script_pubkey_byte
 
         #print(output_stream)  
 
@@ -319,27 +342,34 @@ for filename in os.listdir(directory):
                         is_tx_valid = False
                         break
 
-        if is_tx_valid:            
-            total_fees += input_amount-output_amount
-            tx_data = version+input_count+input_stream+output_count+output_stream+locktime                              
-                
-            if tx_type=="s":
-                witness_tx_data = version+"00"+"01"+input_count+input_stream+output_count+output_stream+input_stream_witness+locktime
-                #print("\nWitness TX data:", witness_tx_data)
-                wt_tx_id = double_sha256(witness_tx_data)
-                wt_txid_arr.append(wt_tx_id)
-                # print("\nwTX ID:", wt_tx_id)
-            else:
-                wt_tx_id = double_sha256(tx_data)
-                wt_txid_arr.append(wt_tx_id)
-                # print("\nwTX ID:", double_sha256(tx_data))
+        total_tx_weight = (non_w_weight*4) + w_weight
 
-            tx_ids_arr.append(get_tx_id(tx_data))
-            
-            # print("\nTx data:", tx_data)
-            # print("\nTX ID:", get_tx_id(tx_data))
-            # print("\nFile name check:", get_file_name(tx_data))
-            # print("-------------------------------------------------------------------------")
+        if is_tx_valid:            
+            if max_block_weight>total_tx_weight:
+
+                max_block_weight -= total_tx_weight
+                total_fees += input_amount-output_amount
+                tx_data = version+input_count+input_stream+output_count+output_stream+locktime                              
+                    
+                if tx_type=="s":
+                    witness_tx_data = version+"00"+"01"+input_count+input_stream+output_count+output_stream+input_stream_witness+locktime
+                    #print("\nWitness TX data:", witness_tx_data)
+                    wt_tx_id = double_sha256(witness_tx_data)
+                    wt_txid_arr.append(wt_tx_id)
+                    # print("\nwTX ID:", wt_tx_id)
+                else:
+                    wt_tx_id = double_sha256(tx_data)
+                    wt_txid_arr.append(wt_tx_id)
+                    # print("\nwTX ID:", double_sha256(tx_data))
+
+                tx_ids_arr.append(get_tx_id(tx_data))
+                
+                # print("\nTx data:", tx_data)
+                # print("\nTX ID:", get_tx_id(tx_data))
+                # print("\nFile name check:", get_file_name(tx_data))
+                # print("-------------------------------------------------------------------------")
+            else:
+                break    
 
 txids = [bytes.fromhex(txid) for txid in wt_txid_arr]    
 witness_root_hash = calculate_merkle_root(txids).hex()
