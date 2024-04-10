@@ -329,12 +329,12 @@ for filename in os.listdir(directory):
                 wt_tx_id = double_sha256(witness_tx_data)
                 wt_txid_arr.append(wt_tx_id)
                 # print("\nwTX ID:", wt_tx_id)
-                tx_ids_arr.append(wt_tx_id)
+                tx_ids_arr.append(reverse_txid_to_natural(wt_tx_id))
             else:
                 wt_tx_id = double_sha256(tx_data)
                 wt_txid_arr.append(wt_tx_id)
                 # print("\nwTX ID:", double_sha256(tx_data))
-                tx_ids_arr.append(wt_tx_id)
+                tx_ids_arr.append(reverse_txid_to_natural(wt_tx_id))
             
             # print("\nTx data:", tx_data)
             # print("\nTX ID:", get_tx_id(tx_data))
