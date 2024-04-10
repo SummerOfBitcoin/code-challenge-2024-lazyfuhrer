@@ -329,12 +329,14 @@ for filename in os.listdir(directory):
                 wt_tx_id = double_sha256(witness_tx_data)
                 wt_txid_arr.append(wt_tx_id)
                 # print("\nwTX ID:", wt_tx_id)
-                tx_ids_arr.append(reverse_txid_to_natural(wt_tx_id))
+                tx_ids_arr.append(bytes.fromhex(wt_tx_id)[::-1].hex()) 
             else:
                 wt_tx_id = double_sha256(tx_data)
                 wt_txid_arr.append(wt_tx_id)
                 # print("\nwTX ID:", double_sha256(tx_data))
-                tx_ids_arr.append(reverse_txid_to_natural(wt_tx_id))
+                tx_ids_arr.append(bytes.fromhex(wt_tx_id)[::-1].hex())
+
+            #tx_ids_arr.append(get_tx_id(tx_data))  
             
             # print("\nTx data:", tx_data)
             # print("\nTX ID:", get_tx_id(tx_data))
@@ -343,6 +345,7 @@ for filename in os.listdir(directory):
 
 txids = [bytes.fromhex(txid) for txid in wt_txid_arr]    
 witness_root_hash = calculate_merkle_root(txids).hex()
+#print("merkle root:", witness_root_hash)
 witness_commitment = double_sha256(witness_root_hash+witness_reserved_value)
 # print("\nWitness commitment:", witness_commitment)
 # print("\nFees:", total_fees)
@@ -372,12 +375,12 @@ locktime = "00000000"
 coinbase_tx = version+marker+flag+input_count+input_txid+vout+script_sig_size+script_sig+seq+output_count+amount_1+script_pubkey_size_1+script_pubkey_1+amount_2+script_pubkey_2_size+script_pubkey_2+witness_items+witness_val_size+witness_val+locktime
 coinbase_tx_without_witness = version+input_count+input_txid+vout+script_sig_size+script_sig+seq+output_count+amount_1+script_pubkey_size_1+script_pubkey_1+amount_2+script_pubkey_2_size+script_pubkey_2+locktime
 #print("\n",coinbase_tx)
-# tx_ids_arr.insert(0, natural_txid_to_reverse(double_sha256(coinbase_tx_without_witness)))
+#tx_ids_arr.insert(0, natural_txid_to_reverse(double_sha256(coinbase_tx_without_witness)))
 #*****************coinbase***************************************************************
 target = "0000ffff00000000000000000000000000000000000000000000000000000000"
 block_version = "00000020"
 prev_block_header_hash = reverse_txid_to_natural("0000000000000000035a223027a6d55f7dffaab25f06a1a63cec1b5e43ef50d0")
-merkle_root = witness_commitment
+merkle_root = witness_root_hash
 time = int(time.time()).to_bytes(4, byteorder='little').hex()
 bits = reverse_txid_to_natural("1f00ffff")
 nonce = 0
