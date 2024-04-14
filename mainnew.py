@@ -24,6 +24,14 @@ for filename in os.listdir(directory):
 
         should_skip_file = False
         for item in data["vin"]:
+            if item["prevout"]["scriptpubkey_type"] == "v1_p2tr":
+                should_skip_file = True
+                break
+        if should_skip_file:
+            continue        
+
+        should_skip_file = False
+        for item in data["vin"]:
             if item["prevout"]["scriptpubkey_type"] == "p2sh" and "witness" in item and len(item["witness"])>2:
                 should_skip_file = True
                 break
