@@ -361,15 +361,23 @@ for filename in os.listdir(directory):
         else:
             continue        
 
-sorted_total_txs = sorted(total_txs, key=lambda x: (x['fees'], -x['weight']), reverse=True)
+sorted_total_txs = sorted(total_txs, key=lambda x: (-x['fees'], x['weight']), reverse=True)
+
+# w =0;fee=0
 
 for item in sorted_total_txs:
     if max_block_weight>item["weight"]:
         max_block_weight -= item["weight"]
         wt_txid_arr.append(item["w_txid"])
         tx_ids_arr.append(item["txid"])
+
+        # w += item["weight"]
+        # fee += item["fees"]
+
     else:
-        break    
+        continue    
+
+# print(fee, w)
   
 wt_txid_arr.insert(0, witness_reserved_value)
 
