@@ -1,48 +1,33 @@
+# All the necessary imports 
 import os, json, time
 from utils import calculate_merkle_root, double_sha256, extract_public_keys_p2sh, extract_public_keys_p2wsh, extract_signatures_p2sh, extract_sigs_p2wsh, get_file_name, natural_txid_to_reverse, reverse_txid_to_natural, get_tx_id, encode_compact_size, is_sig_valid, decode_p2pkh_scriptsig
 
+# Constant values and data structs
 directory = './mempool'
-
 total_txs = []
-
 max_block_weight = 4000000
 witness_reserved_value = "0000000000000000000000000000000000000000000000000000000000000000"
 wt_txid_arr = []
 tx_ids_arr = []
-
 total_fees = 0
 
+# Looping through each file
 for filename in os.listdir(directory):
     file_path = os.path.join(directory, filename)
     with open(file_path, 'r') as f:
-        # print(f"Filename: {filename}")
         data = json.load(f)
 
+        # Checking if the transaction is legacy or segwit type
         tx_type = "l"
         for item in data["vin"]:
             if "witness" in item:
                 tx_type = "s"     
                 break
 
+        # Skipping some files if these conditions are met
         should_skip_file = False
         for item in data["vin"]:
-            if item["prevout"]["scriptpubkey_type"] == "v1_p2tr":
-                should_skip_file = True
-                break
-        if should_skip_file:
-            continue        
-
-        should_skip_file = False
-        for item in data["vin"]:
-            if item["prevout"]["scriptpubkey_type"] == "p2sh" and "witness" in item and len(item["witness"])>2:
-                should_skip_file = True
-                break
-        if should_skip_file:
-            continue  
-
-        should_skip_file = False
-        for item in data["vin"]:
-            if item["prevout"]["scriptpubkey_type"] == "v0_p2wsh" and "witness" in item and len(item["witness"][0])>0:
+            if (item["prevout"]["scriptpubkey_type"] == "v1_p2tr") or (item["prevout"]["scriptpubkey_type"] == "p2sh" and "witness" in item and len(item["witness"])>2) or (item["prevout"]["scriptpubkey_type"] == "v0_p2wsh" and "witness" in item and len(item["witness"][0])>0):
                 should_skip_file = True
                 break
         if should_skip_file:
@@ -68,7 +53,7 @@ for filename in os.listdir(directory):
         if tx_type=="s":
             w_weight = 2
 
-        # looping through inputs
+        # looping through inputs to calculate serialized transaction data to get input_stream for tx_id
         for item in data["vin"]:
             natural_tx_id = reverse_txid_to_natural(item["txid"])
             vout = item["vout"].to_bytes(4, byteorder='little').hex()
@@ -102,10 +87,7 @@ for filename in os.listdir(directory):
 
             non_w_weight += 32+4+4+script_sig_size_byte+script_sig_byte
 
-
-        #print(input_stream) 
-
-        # looping theough outputs
+        # looping theough outputs to calculate serialized transaction data to get output_stream for tx_id
         for item in data["vout"]:
             amount = item["value"].to_bytes(8, byteorder='little').hex()
             script_pubkey_size = encode_compact_size(len(bytes.fromhex(item["scriptpubkey"]))).hex()
@@ -119,17 +101,16 @@ for filename in os.listdir(directory):
 
             non_w_weight += 8+script_pubkey_size_byte+script_pubkey_byte
 
-        #print(output_stream)  
+        # Verifying signatures for each input in a transaction
 
-
-        in_arr = [] 
-
+        # For legacy transactions 
         if tx_type=="l":
             for item in data["vin"]:
 
                 input_stream_verify = ""
                 current = reverse_txid_to_natural(item["txid"])
 
+                # For legacy p2pkh type transactions 
                 if item["prevout"]["scriptpubkey_type"] == "p2pkh":
                     
                     natural_tx_id = reverse_txid_to_natural(item["txid"])
@@ -161,13 +142,12 @@ for filename in os.listdir(directory):
 
                     tx_input = version+input_count+input_stream_verify+output_count+output_stream+locktime+sig_hash_type
                     if is_sig_valid(tx_input, full_sig_asm[:-2], public_key_asm):
-                        # print("valid")
                         continue
                     else:
-                        # print("invalid")
                         is_tx_valid = False
                         break
 
+                # For legacy p2sh type transactions
                 elif item["prevout"]["scriptpubkey_type"] == "p2sh":
                     
                     natural_tx_id = reverse_txid_to_natural(item["txid"])
@@ -201,13 +181,12 @@ for filename in os.listdir(directory):
                                 passed += 1
                                 break
                     if passed==len(signatures):
-                        # print("valid!")
                         continue
-                    else:
-                        # print("invalid!")    
+                    else:   
                         is_tx_valid = False
                         break
 
+        # For segwit transactions
         else:
             txid_vout_inputs = ""
             seq_inputs = ""
@@ -225,6 +204,7 @@ for filename in os.listdir(directory):
                 input_stream_verify = ""
                 current = reverse_txid_to_natural(item["txid"])
                 
+                # For segwit v0_p2wpkh type transactions
                 if item["prevout"]["scriptpubkey_type"] == "v0_p2wpkh":
                     natural_tx_id = reverse_txid_to_natural(item["txid"])
                     vout = item["vout"].to_bytes(4, byteorder='little').hex()
@@ -233,7 +213,6 @@ for filename in os.listdir(directory):
 
                     pkh = item["prevout"]["scriptpubkey_asm"].split()[-1]
                     pkh_size_hex = encode_compact_size(len(bytes.fromhex(pkh))).hex()
-                    # scriptcode_formula = 1976a914{publickeyhash}88ac
                     scriptcode = "1976a9"+pkh_size_hex+pkh+"88ac"
                     signature = item["witness"][0]
                     public_key = item["witness"][1]
@@ -242,13 +221,12 @@ for filename in os.listdir(directory):
                     # preimage = version + hash256(inputs) + hash256(sequences) + input + scriptcode + amount + sequence + hash256(outputs) + locktime + sighash_type
                     tx_input = version + double_sha256(txid_vout_inputs) + double_sha256(seq_inputs) + natural_tx_id + vout + scriptcode + amount + sequence_no + double_sha256(output_stream) + locktime + sig_hash_type
                     if is_sig_valid(tx_input, signature[:-2], public_key):
-                        # print("valido")
                         continue
                     else:
-                        # print("invalido")
                         is_tx_valid = False
                         break
 
+                # For segwit p2sh type transactions
                 elif item["prevout"]["scriptpubkey_type"] == "p2sh":
                     natural_tx_id = reverse_txid_to_natural(item["txid"])
                     vout = item["vout"].to_bytes(4, byteorder='little').hex()
@@ -268,10 +246,8 @@ for filename in os.listdir(directory):
                         tx_input = version + double_sha256(txid_vout_inputs) + double_sha256(seq_inputs) + natural_tx_id + vout + scriptcode + amount + sequence_no + double_sha256(output_stream) + locktime + sig_hash_type
 
                         if is_sig_valid(tx_input, signature[:-2], public_key):
-                            # print("validx")
                             continue
                         else:
-                            # print("invalidx")
                             is_tx_valid = False
                             break
                     
@@ -305,14 +281,12 @@ for filename in os.listdir(directory):
                                     passed += 1
                                     break
                         if passed==len(signatures):
-                            # print("valid!!")
                             continue
                         else:
-                            # print("invalid!!")   
                             is_tx_valid = False
                             break
                         
-
+                # For segwit v0_p2wsh type transactions
                 elif item["prevout"]["scriptpubkey_type"] == "v0_p2wsh":
                     natural_tx_id = reverse_txid_to_natural(item["txid"])
                     vout = item["vout"].to_bytes(4, byteorder='little').hex()
@@ -337,13 +311,12 @@ for filename in os.listdir(directory):
                                 passed += 1
                                 break
                     if passed==len(signatures):
-                        # print("validy")
                         continue
                     else:
-                        # print("invalidy")
                         is_tx_valid = False
                         break
 
+        # Here we proceed further with the current transaction ONLY if it's valid
         if is_tx_valid:  
             weight = (non_w_weight*4) + w_weight
             fees = input_amount-output_amount
@@ -361,33 +334,24 @@ for filename in os.listdir(directory):
         else:
             continue        
 
+# Sorting transactions with most fees and least weights
 sorted_total_txs = sorted(total_txs, key=lambda x: (-x['fees'], x['weight']), reverse=True)
 
-# w =0;fee=0
-
+# We keep adding transactions untill the max_block_weight is greater than the current transaction weight. And reduce the max_block_weight with the added transaction weight if successful
 for item in sorted_total_txs:
     if max_block_weight>item["weight"]:
         max_block_weight -= item["weight"]
         wt_txid_arr.append(item["w_txid"])
         tx_ids_arr.append(item["txid"])
-
-        # w += item["weight"]
-        # fee += item["fees"]
-
     else:
         continue    
-
-# print(fee, w)
   
 wt_txid_arr.insert(0, witness_reserved_value)
 
 txids = [bytes.fromhex(txid) for txid in wt_txid_arr]    
 witness_root_hash = calculate_merkle_root(txids).hex()
-#print("merkle root:", witness_root_hash)
 witness_commitment = double_sha256(witness_root_hash+witness_reserved_value)
-# print("\nWitness commitment:", witness_commitment)
-# print("\nFees:", total_fees)
-#*****************coinbase***************************************************************
+# Information for correctly constructing a valid coinbase transaction
 version = "01000000"
 marker = "00"
 flag = "01"
@@ -412,9 +376,9 @@ witness_val_size = encode_compact_size(len(bytes.fromhex(witness_val))).hex()
 locktime = "00000000"
 coinbase_tx = version+marker+flag+input_count+input_txid+vout+script_sig_size+script_sig+seq+output_count+amount_1+script_pubkey_size_1+script_pubkey_1+amount_2+script_pubkey_2_size+script_pubkey_2+witness_items+witness_val_size+witness_val+locktime
 coinbase_tx_without_witness = version+input_count+input_txid+vout+script_sig_size+script_sig+seq+output_count+amount_1+script_pubkey_size_1+script_pubkey_1+amount_2+script_pubkey_2_size+script_pubkey_2+locktime
-#print("\n",coinbase_tx)
 tx_ids_arr.insert(0, natural_txid_to_reverse(double_sha256(coinbase_tx_without_witness)))
-#*****************coinbase***************************************************************
+
+# Information for correctly creating a valid block
 target = "0000ffff00000000000000000000000000000000000000000000000000000000"
 block_version = "00000020"
 prev_block_header_hash = reverse_txid_to_natural("0000000000000000035a223027a6d55f7dffaab25f06a1a63cec1b5e43ef50d0")
@@ -428,6 +392,7 @@ nonce = 0
 
 block_header = block_version+prev_block_header_hash+merkle_root+time+bits
 
+# Looping untill the current block_header header is less than the current difficulty target by incrementally increasing the nonce
 while True:
     attempt = block_header + ((nonce).to_bytes(4, byteorder='little').hex())
     attempt_hash = double_sha256(attempt)
@@ -438,6 +403,7 @@ while True:
         break
     nonce += 1
 
+# Storing the result in output.txt
 with open("output.txt", "w") as file:
     file.write(block_header + "\n")
     file.write(coinbase_tx + "\n")
