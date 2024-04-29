@@ -2,4 +2,4 @@
 
 pip install -r requirements.txt
 
-python3 test.py
+python3 main.py
