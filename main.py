@@ -199,13 +199,14 @@ for filename in os.listdir(directory):
 
                 input_stream_verify = ""
                 current = reverse_txid_to_natural(item["txid"])
+
+                natural_tx_id = reverse_txid_to_natural(item["txid"])
+                vout = item["vout"].to_bytes(4, byteorder='little').hex()
+                sequence_no = item["sequence"].to_bytes(4, byteorder='little').hex()
+                amount = item["prevout"]["value"].to_bytes(8, byteorder='little').hex()
                 
                 # For segwit v0_p2wpkh type transactions
                 if item["prevout"]["scriptpubkey_type"] == "v0_p2wpkh":
-                    natural_tx_id = reverse_txid_to_natural(item["txid"])
-                    vout = item["vout"].to_bytes(4, byteorder='little').hex()
-                    sequence_no = item["sequence"].to_bytes(4, byteorder='little').hex()
-                    amount = item["prevout"]["value"].to_bytes(8, byteorder='little').hex()
 
                     pkh = item["prevout"]["scriptpubkey_asm"].split()[-1]
                     pkh_size_hex = encode_compact_size(len(bytes.fromhex(pkh))).hex()
@@ -224,10 +225,6 @@ for filename in os.listdir(directory):
 
                 # For segwit p2sh type transactions
                 elif item["prevout"]["scriptpubkey_type"] == "p2sh":
-                    natural_tx_id = reverse_txid_to_natural(item["txid"])
-                    vout = item["vout"].to_bytes(4, byteorder='little').hex()
-                    sequence_no = item["sequence"].to_bytes(4, byteorder='little').hex()
-                    amount = item["prevout"]["value"].to_bytes(8, byteorder='little').hex()
 
                     if "witness" in item:
                         pkh = item["inner_redeemscript_asm"].split()[-1]
@@ -284,10 +281,6 @@ for filename in os.listdir(directory):
                         
                 # For segwit v0_p2wsh type transactions
                 elif item["prevout"]["scriptpubkey_type"] == "v0_p2wsh":
-                    natural_tx_id = reverse_txid_to_natural(item["txid"])
-                    vout = item["vout"].to_bytes(4, byteorder='little').hex()
-                    sequence_no = item["sequence"].to_bytes(4, byteorder='little').hex()
-                    amount = item["prevout"]["value"].to_bytes(8, byteorder='little').hex()
 
                     script_pubkey_in = item["witness"][-1]
                     script_pubkey_in_size = encode_compact_size(len(bytes.fromhex(script_pubkey_in))).hex()
