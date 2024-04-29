@@ -106,7 +106,6 @@ for filename in os.listdir(directory):
         # For legacy transactions 
         if tx_type=="l":
             for item in data["vin"]:
-
                 input_stream_verify = ""
                 current = reverse_txid_to_natural(item["txid"])
 
@@ -196,7 +195,6 @@ for filename in os.listdir(directory):
                 seq_inputs += sequence_no
 
             for item in data["vin"]:
-
                 input_stream_verify = ""
                 current = reverse_txid_to_natural(item["txid"])
 
